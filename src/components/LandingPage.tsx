@@ -6,9 +6,10 @@ import { Zap, Palette, Database, Rocket, Code, Users, Star, Check } from "lucide
 
 interface LandingPageProps {
   onNavigate?: (view: string) => void;
+  onGetStarted?: () => void;
 }
 
-const LandingPage = ({ onNavigate }: LandingPageProps) => {
+const LandingPage = ({ onNavigate, onGetStarted }: LandingPageProps) => {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
 
   const features = [

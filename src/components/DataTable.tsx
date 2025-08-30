@@ -1,33 +1,22 @@
-import { useState, useEffect } from "react";
+import React, { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
-import { Plus, Edit, Trash2, RefreshCw, Search } from "lucide-react";
+import { Search, Plus, Edit, Trash2, ExternalLink } from "lucide-react";
+import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/contexts/AuthContext";
 
+// Project interface to match our database schema
 interface Project {
   id: string;
   name: string;
-  status: "active" | "completed" | "pending";
+  status: "draft" | "building" | "deployed" | "failed";
   owner: string;
   created: string;
   description: string;
@@ -41,354 +30,314 @@ const DataTable = () => {
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [editingProject, setEditingProject] = useState<Project | null>(null);
   const { toast } = useToast();
-
-  // Mock data - in real app, this would come from the API
-  const mockProjects: Project[] = [
-    {
-      id: "1",
-      name: "E-commerce Platform",
-      status: "active",
-      owner: "John Doe",
-      created: "2024-01-15",
-      description: "Modern online store with payment integration"
-    },
-    {
-      id: "2",
-      name: "Task Manager",
-      status: "completed",
-      owner: "Jane Smith",
-      created: "2024-01-20",
-      description: "Team collaboration tool"
-    },
-    {
-      id: "3",
-      name: "Portfolio Site",
-      status: "pending",
-      owner: "Mike Johnson",
-      created: "2024-01-25",
-      description: "Personal portfolio website"
-    },
-  ];
-
-  useEffect(() => {
-    fetchProjects();
-  }, []);
+  const { user } = useAuth();
 
   const fetchProjects = async () => {
-    setLoading(true);
+    if (!user) {
+      setProjects([]);
+      setLoading(false);
+      return;
+    }
+
     try {
-      // API call to n8n webhook
-      const response = await fetch("https://n8n.techg.io/webhook/projects");
+      setLoading(true);
       
-      if (response.ok) {
-        const data = await response.json();
-        setProjects(data);
-      } else {
-        // Fallback to mock data if API fails
-        setProjects(mockProjects);
-        console.log("Using mock data - API endpoint not available");
-      }
+      const { data, error } = await supabase
+        .from('projects')
+        .select('*')
+        .eq('user_id', user.id)
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+
+      // Transform data to match Project interface
+      const transformedProjects: Project[] = data.map(project => ({
+        id: project.id,
+        name: project.name,
+        status: project.status as "draft" | "building" | "deployed" | "failed",
+        owner: user.email || 'Unknown',
+        created: new Date(project.created_at).toLocaleDateString(),
+        description: project.description || ''
+      }));
+
+      setProjects(transformedProjects);
     } catch (error) {
-      // Fallback to mock data
-      setProjects(mockProjects);
-      console.log("Using mock data - API error:", error);
+      toast({
+        title: "Error",
+        description: "Failed to fetch projects",
+        variant: "destructive",
+      });
     } finally {
       setLoading(false);
     }
   };
 
-  const handleAdd = async (formData: FormData) => {
-    const newProject: Project = {
-      id: Date.now().toString(),
-      name: formData.get("name") as string,
-      status: formData.get("status") as "active" | "completed" | "pending",
-      owner: formData.get("owner") as string,
-      created: new Date().toISOString().split('T')[0],
-      description: formData.get("description") as string,
-    };
+  useEffect(() => {
+    fetchProjects();
+  }, [user]);
 
+  const handleAdd = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    if (!user) return;
+
+    const formData = new FormData(e.currentTarget);
+    
     try {
-      const response = await fetch("https://n8n.techg.io/webhook/projects", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(newProject),
-      });
+      const { data, error } = await supabase
+        .from('projects')
+        .insert([{
+          user_id: user.id,
+          name: formData.get("name") as string,
+          description: formData.get("description") as string || null,
+          status: 'draft'
+        }])
+        .select()
+        .single();
 
-      if (response.ok) {
-        setProjects([...projects, newProject]);
-        setIsAddDialogOpen(false);
-        toast({
-          title: "Project added successfully!",
-          description: "The new project has been created.",
-        });
-      }
-    } catch (error) {
-      // Simulate success for demo
-      setProjects([...projects, newProject]);
+      if (error) throw error;
+
+      // Add to local state
+      const newProject: Project = {
+        id: data.id,
+        name: data.name,
+        status: data.status as "draft" | "building" | "deployed" | "failed",
+        owner: user.email || 'Unknown',
+        created: new Date(data.created_at).toLocaleDateString(),
+        description: data.description || ''
+      };
+
+      setProjects(prev => [newProject, ...prev]);
       setIsAddDialogOpen(false);
+      
       toast({
-        title: "Project added successfully!",
-        description: "The new project has been created.",
+        title: "Project created",
+        description: "New project has been created successfully",
+      });
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Failed to create project",
+        variant: "destructive",
       });
     }
   };
 
-  const handleEdit = async (formData: FormData) => {
-    if (!editingProject) return;
+  const handleEdit = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    if (!editingProject || !user) return;
 
-    const updatedProject: Project = {
-      ...editingProject,
-      name: formData.get("name") as string,
-      status: formData.get("status") as "active" | "completed" | "pending",
-      owner: formData.get("owner") as string,
-      description: formData.get("description") as string,
-    };
-
+    const formData = new FormData(e.currentTarget);
+    
     try {
-      const response = await fetch(`https://n8n.techg.io/webhook/projects/${editingProject.id}`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(updatedProject),
-      });
+      const { error } = await supabase
+        .from('projects')
+        .update({
+          name: formData.get("name") as string,
+          description: formData.get("description") as string || null
+        })
+        .eq('id', editingProject.id)
+        .eq('user_id', user.id);
 
-      if (response.ok) {
-        setProjects(projects.map(p => p.id === editingProject.id ? updatedProject : p));
-        setIsEditDialogOpen(false);
-        setEditingProject(null);
-        toast({
-          title: "Project updated successfully!",
-          description: "Changes have been saved.",
-        });
-      }
-    } catch (error) {
-      // Simulate success for demo
-      setProjects(projects.map(p => p.id === editingProject.id ? updatedProject : p));
+      if (error) throw error;
+
+      const updatedProject: Project = {
+        ...editingProject,
+        name: formData.get("name") as string,
+        description: formData.get("description") as string || ""
+      };
+
+      setProjects(prev => prev.map(p => p.id === editingProject.id ? updatedProject : p));
       setIsEditDialogOpen(false);
       setEditingProject(null);
+      
       toast({
-        title: "Project updated successfully!",
-        description: "Changes have been saved.",
+        title: "Project updated",
+        description: "Project has been updated successfully",
+      });
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Failed to update project",
+        variant: "destructive",
       });
     }
   };
 
   const handleDelete = async (id: string) => {
-    try {
-      const response = await fetch(`https://n8n.techg.io/webhook/projects/${id}`, {
-        method: "DELETE",
-      });
+    if (!user) return;
 
-      if (response.ok) {
-        setProjects(projects.filter(p => p.id !== id));
-        toast({
-          title: "Project deleted",
-          description: "The project has been removed.",
-        });
-      }
-    } catch (error) {
-      // Simulate success for demo
-      setProjects(projects.filter(p => p.id !== id));
+    try {
+      const { error } = await supabase
+        .from('projects')
+        .delete()
+        .eq('id', id)
+        .eq('user_id', user.id);
+
+      if (error) throw error;
+
+      setProjects(prev => prev.filter(p => p.id !== id));
+      
       toast({
         title: "Project deleted",
-        description: "The project has been removed.",
+        description: "Project has been deleted successfully",
+      });
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Failed to delete project",
+        variant: "destructive",
       });
     }
   };
 
   const getStatusBadge = (status: string) => {
-    switch (status) {
-      case "active":
-        return <Badge className="bg-success/10 text-success border-success/20">Active</Badge>;
-      case "completed":
-        return <Badge className="bg-primary/10 text-primary border-primary/20">Completed</Badge>;
-      case "pending":
-        return <Badge variant="secondary">Pending</Badge>;
-      default:
-        return <Badge variant="outline">{status}</Badge>;
-    }
+    const statusConfig = {
+      draft: { variant: "secondary" as const, text: "Draft" },
+      building: { variant: "default" as const, text: "Building" },
+      deployed: { variant: "default" as const, text: "Deployed" },
+      failed: { variant: "destructive" as const, text: "Failed" }
+    };
+    
+    const config = statusConfig[status as keyof typeof statusConfig] || statusConfig.draft;
+    return <Badge variant={config.variant}>{config.text}</Badge>;
   };
 
   const filteredProjects = projects.filter(project =>
     project.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    project.owner.toLowerCase().includes(searchQuery.toLowerCase()) ||
     project.description.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
-  const ProjectForm = ({ project, onSubmit }: { project?: Project; onSubmit: (formData: FormData) => void }) => {
-    const handleFormSubmit = (e: React.FormEvent<HTMLFormElement>) => {
-      e.preventDefault();
-      const formData = new FormData(e.currentTarget);
-      onSubmit(formData);
-    };
-
+  if (!user) {
     return (
-      <form onSubmit={handleFormSubmit} className="space-y-4">
-        <div className="space-y-2">
-          <Label htmlFor="name">Project Name</Label>
-          <Input 
-            id="name" 
-            name="name" 
-            defaultValue={project?.name} 
-            placeholder="Enter project name"
-            required 
-          />
-        </div>
-        
-        <div className="space-y-2">
-          <Label htmlFor="owner">Owner</Label>
-          <Input 
-            id="owner" 
-            name="owner" 
-            defaultValue={project?.owner} 
-            placeholder="Project owner"
-            required 
-          />
-        </div>
-        
-        <div className="space-y-2">
-          <Label htmlFor="status">Status</Label>
-          <select 
-            id="status" 
-            name="status" 
-            defaultValue={project?.status || "pending"}
-            className="w-full h-10 px-3 py-2 text-sm bg-background border border-input rounded-md"
-            required
-          >
-            <option value="pending">Pending</option>
-            <option value="active">Active</option>
-            <option value="completed">Completed</option>
-          </select>
-        </div>
-        
-        <div className="space-y-2">
-          <Label htmlFor="description">Description</Label>
-          <Input 
-            id="description" 
-            name="description" 
-            defaultValue={project?.description} 
-            placeholder="Brief description"
-            required 
-          />
-        </div>
-        
-        <DialogFooter>
-          <Button type="submit" className="btn-hero">
-            {project ? "Update" : "Add"} Project
-          </Button>
-        </DialogFooter>
-      </form>
+      <Card className="card-elegant">
+        <CardContent className="text-center py-12">
+          <p className="text-muted-foreground">Please sign in to view your projects.</p>
+        </CardContent>
+      </Card>
     );
-  };
+  }
 
   return (
     <Card className="card-elegant">
       <CardHeader>
         <div className="flex items-center justify-between">
           <div>
-            <CardTitle className="text-2xl">Projects Management</CardTitle>
+            <CardTitle className="text-2xl">Project Management</CardTitle>
             <CardDescription>
-              Manage your projects with full CRUD operations
+              Manage your TECH-G projects with full CRUD operations
             </CardDescription>
           </div>
-          <div className="flex space-x-2">
-            <Button variant="outline" size="sm" onClick={fetchProjects} disabled={loading}>
-              <RefreshCw className={`w-4 h-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
-              Refresh
-            </Button>
-            <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
-              <DialogTrigger asChild>
-                <Button className="btn-hero">
-                  <Plus className="w-4 h-4 mr-2" />
-                  Add Project
-                </Button>
-              </DialogTrigger>
-              <DialogContent>
-                <DialogHeader>
-                  <DialogTitle>Add New Project</DialogTitle>
-                  <DialogDescription>
-                    Create a new project entry in the system.
-                  </DialogDescription>
-                </DialogHeader>
-                <ProjectForm onSubmit={handleAdd} />
-              </DialogContent>
-            </Dialog>
-          </div>
+          
+          <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
+            <DialogTrigger asChild>
+              <Button className="btn-hero">
+                <Plus className="w-4 h-4 mr-2" />
+                Add Project
+              </Button>
+            </DialogTrigger>
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>Add New Project</DialogTitle>
+                <DialogDescription>
+                  Create a new project to start building with TECH-G
+                </DialogDescription>
+              </DialogHeader>
+              <form onSubmit={handleAdd}>
+                <div className="space-y-4 py-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="name">Project Name</Label>
+                    <Input id="name" name="name" placeholder="My Awesome Project" required />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="description">Description</Label>
+                    <Textarea 
+                      id="description" 
+                      name="description" 
+                      placeholder="Brief description of your project"
+                      rows={3}
+                    />
+                  </div>
+                </div>
+                <DialogFooter>
+                  <Button type="submit" className="btn-hero">Create Project</Button>
+                </DialogFooter>
+              </form>
+            </DialogContent>
+          </Dialog>
         </div>
         
-        <div className="flex items-center space-x-2 mt-4">
+        <div className="flex items-center space-x-4">
           <div className="relative flex-1 max-w-sm">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground w-4 h-4" />
+            <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
             <Input
               placeholder="Search projects..."
-              className="pl-10"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
+              className="pl-10"
             />
           </div>
         </div>
       </CardHeader>
-
+      
       <CardContent>
         {loading ? (
-          <div className="flex items-center justify-center py-8">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
-            <span className="ml-2 text-muted-foreground">Loading projects...</span>
+          <div className="space-y-4">
+            {[1, 2, 3].map((i) => (
+              <div key={i} className="h-16 bg-muted rounded animate-pulse"></div>
+            ))}
           </div>
         ) : (
-          <div className="rounded-md border">
+          <>
             <Table>
               <TableHeader>
                 <TableRow>
                   <TableHead>Name</TableHead>
-                  <TableHead>Owner</TableHead>
                   <TableHead>Status</TableHead>
+                  <TableHead>Owner</TableHead>
                   <TableHead>Created</TableHead>
-                  <TableHead>Description</TableHead>
                   <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {filteredProjects.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
-                      {searchQuery ? "No projects found matching your search." : "No projects available."}
+                    <TableCell colSpan={5} className="text-center py-8 text-muted-foreground">
+                      {searchQuery ? "No projects found matching your search." : "No projects yet. Create your first project!"}
                     </TableCell>
                   </TableRow>
                 ) : (
                   filteredProjects.map((project) => (
-                    <TableRow key={project.id}>
-                      <TableCell className="font-medium">{project.name}</TableCell>
-                      <TableCell>{project.owner}</TableCell>
+                    <TableRow key={project.id} className="hover:bg-muted/50">
+                      <TableCell className="font-medium">
+                        <div>
+                          <div className="font-semibold">{project.name}</div>
+                          {project.description && (
+                            <div className="text-sm text-muted-foreground mt-1">
+                              {project.description}
+                            </div>
+                          )}
+                        </div>
+                      </TableCell>
                       <TableCell>{getStatusBadge(project.status)}</TableCell>
+                      <TableCell>{project.owner}</TableCell>
                       <TableCell>{project.created}</TableCell>
-                      <TableCell className="max-w-xs truncate">{project.description}</TableCell>
                       <TableCell className="text-right">
-                        <div className="flex justify-end space-x-2">
-                          <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
-                            <DialogTrigger asChild>
-                              <Button 
-                                variant="outline" 
-                                size="sm"
-                                onClick={() => setEditingProject(project)}
-                              >
-                                <Edit className="w-4 h-4" />
-                              </Button>
-                            </DialogTrigger>
-                            <DialogContent>
-                              <DialogHeader>
-                                <DialogTitle>Edit Project</DialogTitle>
-                                <DialogDescription>
-                                  Update the project information.
-                                </DialogDescription>
-                              </DialogHeader>
-                              <ProjectForm project={editingProject || undefined} onSubmit={handleEdit} />
-                            </DialogContent>
-                          </Dialog>
-                          <Button 
-                            variant="outline" 
+                        <div className="flex items-center justify-end space-x-2">
+                          <Button
+                            variant="outline"
                             size="sm"
-                            className="text-destructive hover:bg-destructive hover:text-destructive-foreground"
+                            onClick={() => {
+                              setEditingProject(project);
+                              setIsEditDialogOpen(true);
+                            }}
+                          >
+                            <Edit className="w-4 h-4" />
+                          </Button>
+                          <Button
+                            variant="outline"
+                            size="sm"
                             onClick={() => handleDelete(project.id)}
+                            className="text-destructive hover:text-destructive"
                           >
                             <Trash2 className="w-4 h-4" />
                           </Button>
@@ -399,8 +348,45 @@ const DataTable = () => {
                 )}
               </TableBody>
             </Table>
-          </div>
+          </>
         )}
+        
+        {/* Edit Dialog */}
+        <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Edit Project</DialogTitle>
+              <DialogDescription>
+                Update your project information
+              </DialogDescription>
+            </DialogHeader>
+            <form onSubmit={handleEdit}>
+              <div className="space-y-4 py-4">
+                <div className="space-y-2">
+                  <Label htmlFor="edit-name">Project Name</Label>
+                  <Input 
+                    id="edit-name" 
+                    name="name" 
+                    defaultValue={editingProject?.name} 
+                    required 
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="edit-description">Description</Label>
+                  <Textarea 
+                    id="edit-description" 
+                    name="description" 
+                    defaultValue={editingProject?.description}
+                    rows={3}
+                  />
+                </div>
+              </div>
+              <DialogFooter>
+                <Button type="submit" className="btn-hero">Update Project</Button>
+              </DialogFooter>
+            </form>
+          </DialogContent>
+        </Dialog>
       </CardContent>
     </Card>
   );

@@ -6,6 +6,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 import { Send, CheckCircle } from "lucide-react";
+import { supabase } from "@/integrations/supabase/client";
 
 const ContactForm = () => {
   const [isLoading, setIsLoading] = useState(false);
@@ -25,24 +26,23 @@ const ContactForm = () => {
     };
 
     try {
-      // API call to n8n webhook
-      const response = await fetch("https://n8n.techg.io/webhook/contact", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(data),
-      });
+      // Save to Supabase database
+      const { error } = await supabase
+        .from('contact_submissions')
+        .insert([{
+          name: data.name as string,
+          email: data.email as string,
+          company: data.company as string || null,
+          message: data.message as string,
+        }]);
 
-      if (response.ok) {
-        setIsSubmitted(true);
-        toast({
-          title: "Message sent successfully!",
-          description: "We'll get back to you within 24 hours.",
-        });
-      } else {
-        throw new Error("Failed to send message");
-      }
+      if (error) throw error;
+
+      setIsSubmitted(true);
+      toast({
+        title: "Message sent successfully!",
+        description: "We'll get back to you within 24 hours.",
+      });
     } catch (error) {
       toast({
         title: "Error sending message",
