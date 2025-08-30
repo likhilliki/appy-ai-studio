@@ -2,41 +2,72 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Definition of the design system. All colors, gradients, fonts, etc should be defined here. 
-All colors MUST be HSL.
-*/
-
+/* TECH-G Design System - Modern SaaS Platform */
 @layer base {
   :root {
+    /* Base colors */
     --background: 0 0% 100%;
-    --foreground: 222.2 84% 4.9%;
+    --foreground: 224 71% 4%;
 
+    /* Card colors */
     --card: 0 0% 100%;
-    --card-foreground: 222.2 84% 4.9%;
+    --card-foreground: 224 71% 4%;
 
+    /* Popover colors */
     --popover: 0 0% 100%;
-    --popover-foreground: 222.2 84% 4.9%;
+    --popover-foreground: 224 71% 4%;
 
-    --primary: 222.2 47.4% 11.2%;
-    --primary-foreground: 210 40% 98%;
+    /* TECH-G Brand Colors - Blue to Purple Gradient */
+    --primary: 236 72% 79%;
+    --primary-foreground: 0 0% 100%;
+    --primary-dark: 236 72% 65%;
+    
+    /* Tech-G Purple */
+    --accent-purple: 270 91% 65%;
+    --accent-purple-dark: 270 91% 55%;
+    
+    /* Secondary colors */
+    --secondary: 220 14.3% 95.9%;
+    --secondary-foreground: 220.9 39.3% 11%;
 
-    --secondary: 210 40% 96.1%;
-    --secondary-foreground: 222.2 47.4% 11.2%;
+    /* Muted colors */
+    --muted: 220 14.3% 95.9%;
+    --muted-foreground: 220 8.9% 46.1%;
 
-    --muted: 210 40% 96.1%;
-    --muted-foreground: 215.4 16.3% 46.9%;
+    /* Accent colors */
+    --accent: 220 14.3% 95.9%;
+    --accent-foreground: 220.9 39.3% 11%;
 
-    --accent: 210 40% 96.1%;
-    --accent-foreground: 222.2 47.4% 11.2%;
-
+    /* Status colors */
     --destructive: 0 84.2% 60.2%;
     --destructive-foreground: 210 40% 98%;
+    
+    --success: 142 76% 36%;
+    --success-foreground: 355.7 100% 97.3%;
 
-    --border: 214.3 31.8% 91.4%;
-    --input: 214.3 31.8% 91.4%;
-    --ring: 222.2 84% 4.9%;
+    /* Border and input */
+    --border: 220 13% 91%;
+    --input: 220 13% 91%;
+    --ring: 236 72% 79%;
 
-    --radius: 0.5rem;
+    /* Gradients */
+    --gradient-primary: linear-gradient(135deg, hsl(236 72% 79%), hsl(270 91% 65%));
+    --gradient-secondary: linear-gradient(135deg, hsl(220 14.3% 95.9%), hsl(220 13% 91%));
+    --gradient-hero: linear-gradient(135deg, hsl(236 72% 79%) 0%, hsl(270 91% 65%) 100%);
+    --gradient-card: linear-gradient(145deg, hsl(0 0% 100%) 0%, hsl(220 14.3% 98%) 100%);
+
+    /* Shadows */
+    --shadow-soft: 0 1px 3px 0 hsl(236 72% 79% / 0.1), 0 1px 2px 0 hsl(236 72% 79% / 0.06);
+    --shadow-medium: 0 4px 6px -1px hsl(236 72% 79% / 0.1), 0 2px 4px -1px hsl(236 72% 79% / 0.06);
+    --shadow-large: 0 20px 25px -5px hsl(236 72% 79% / 0.1), 0 10px 10px -5px hsl(236 72% 79% / 0.04);
+    --shadow-glow: 0 0 20px hsl(236 72% 79% / 0.3);
+
+    /* Animations */
+    --transition-fast: all 0.15s ease-out;
+    --transition-smooth: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    --transition-slow: all 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+
+    --radius: 0.75rem;
 
     --sidebar-background: 0 0% 98%;
 
@@ -100,6 +131,107 @@ All colors MUST be HSL.
   }
 
   body {
-    @apply bg-background text-foreground;
+    @apply bg-background text-foreground font-sans antialiased;
+    font-feature-settings: "rlig" 1, "calt" 1;
+  }
+}
+
+@layer components {
+  /* TECH-G Button Variants */
+  .btn-hero {
+    @apply bg-gradient-to-r from-primary to-accent-purple text-primary-foreground 
+           px-8 py-4 rounded-xl font-semibold text-lg shadow-lg hover:shadow-xl
+           transition-all duration-300 hover:scale-105 hover:shadow-glow;
+  }
+  
+  .btn-ghost-hero {
+    @apply border-2 border-primary text-primary bg-transparent
+           px-8 py-4 rounded-xl font-semibold text-lg
+           hover:bg-primary hover:text-primary-foreground
+           transition-all duration-300;
+  }
+
+  /* TECH-G Card Variants */
+  .card-elegant {
+    @apply bg-gradient-to-br from-card to-secondary/50 
+           border border-border rounded-2xl shadow-soft
+           hover:shadow-medium transition-all duration-300;
+  }
+  
+  .card-feature {
+    @apply bg-card border border-border rounded-xl p-8 
+           hover:shadow-medium hover:border-primary/20
+           transition-all duration-300 group;
+  }
+
+  /* TECH-G Gradients */
+  .gradient-hero {
+    background: var(--gradient-hero);
+  }
+  
+  .gradient-primary {
+    background: var(--gradient-primary);
+  }
+  
+  .gradient-card {
+    background: var(--gradient-card);
+  }
+
+  /* TECH-G Animations */
+  .animate-float {
+    animation: float 3s ease-in-out infinite;
+  }
+  
+  .animate-glow {
+    animation: glow 2s ease-in-out infinite alternate;
+  }
+}
+
+@layer utilities {
+  .text-gradient {
+    @apply bg-gradient-to-r from-primary to-accent-purple bg-clip-text text-transparent;
+  }
+  
+  .shadow-soft {
+    box-shadow: var(--shadow-soft);
+  }
+  
+  .shadow-medium {
+    box-shadow: var(--shadow-medium);
+  }
+  
+  .shadow-large {
+    box-shadow: var(--shadow-large);
+  }
+  
+  .shadow-glow {
+    box-shadow: var(--shadow-glow);
+  }
+  
+  .transition-fast {
+    transition: var(--transition-fast);
+  }
+  
+  .transition-smooth {
+    transition: var(--transition-smooth);
+  }
+  
+  .transition-slow {
+    transition: var(--transition-slow);
+  }
+}
+
+/* Custom Animations */
+@keyframes float {
+  0%, 100% { transform: translateY(0px); }
+  50% { transform: translateY(-10px); }
+}
+
+@keyframes glow {
+  from { 
+    box-shadow: 0 0 20px hsl(236 72% 79% / 0.3);
+  }
+  to { 
+    box-shadow: 0 0 30px hsl(236 72% 79% / 0.6), 0 0 40px hsl(270 91% 65% / 0.3);
   }
 }
