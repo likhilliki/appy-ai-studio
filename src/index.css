@@ -161,7 +161,7 @@
   .card-feature {
     @apply bg-card border border-border rounded-xl p-8 
            hover:shadow-medium hover:border-primary/20
-           transition-all duration-300 group;
+           transition-all duration-300;
   }
 
   /* TECH-G Gradients */
